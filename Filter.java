@@ -49,65 +49,44 @@ public class Filter {
 
 	public void box(RasterImage src, RasterImage dst, int kernelSize, BorderProcessing borderProcessing) {
 
-		int[] box = new int[kernelSize * kernelSize];
 		int half = kernelSize / 2;
-		
+
 		for (int y = 0; y < src.height; y++) {
 			for (int x = 0; x < src.width; x++) {
 
-				int posnew = 0; 
+				int posnew = 0;
 
-				for (int i = 0; i < kernelSize; i++) {
-					for (int j = 0; j < kernelSize; j++) {
-						
-						int pos = y * src.width + x;
+				for (int i = -half; i <= half; i++) {
+					for (int j = -half; j <= half; j++) {
 
-						switch (borderProcessing) { 
-						
+						int pos = (y + i) * src.width + (x + j);
+						int border = 0;
+
+						switch (borderProcessing) {
+
 						case WHITE:
-							if (x < half || x >= src.width - half || y < half || y >= src.height - half) {
-								int pixelValue = src.argb[pos];
-								box[posnew] = 0xffffffff;
-								} 
-							else {
-								pos = (y + i - half) * src.width + (x + j - half);
-								int pixelValue = src.argb[pos];
-								box[posnew] = pixelValue;
+							if (x + j < 0 || x + j >= src.width || y + i < half || y + i >= src.height) {
+								border = 255;
+							} else {
+								border = src.argb[pos] & 0xff;
 							}
 							break;
-								
+
 						case CONTINUE:
-							if (x < half || x >= src.width - half || y < half || y >= src.height - half) { 
-								int pixelValue = src.argb[pos];
-								box[posnew] = pixelValue;
-								}
-							else {
-								pos = (y + i - half) * src.width + (x + j - half); 
-								int pixelValue = src.argb[pos];
-								box[posnew] = pixelValue;
+							if (x + j < 0 || x + j >= src.width || y + i < half || y + i >= src.height) {
+								border = src.argb[y * src.width + x] & 0xff;
+							} else {
+								border = src.argb[pos] & 0xff;
 							}
 							break;
 						}
-						posnew++;
+						posnew = posnew + border;
 					}
 				}
 
-				int rn = 0, gn = 0, bn = 0;
-				for (int f = 0; f < box.length; f++) {
+				posnew = posnew / (kernelSize * kernelSize);
 
-					int r = (box[f] >> 16) & 0xff;
-					int g = (box[f] >> 8) & 0xff;
-					int b = box[f] & 0xff;
-
-					rn += r;
-					gn += g;
-					bn += b;
-				}
-				rn = (int) Math.round(rn / box.length);
-				gn = (int) Math.round(gn / box.length);
-				bn = (int) Math.round(bn / box.length);
-
-				int dstval = (0xFF << 24) | (rn << 16) | (gn << 8) | bn;
+				int dstval = (0xFF << 24) | (posnew << 16) | (posnew << 8) | posnew;
 
 				int dstpos = y * dst.width + x;
 				dst.argb[dstpos] = dstval;
@@ -116,8 +95,58 @@ public class Filter {
 	}
 
 	public void median(RasterImage src, RasterImage dst, int kernelSize, BorderProcessing borderProcessing) {
-		// TODO: implement a median filter with given kernel size and border
-		// processing
+
+		for (int yIndex = 0; yIndex < src.argb.length / src.width; yIndex++) {
+			for (int xIndex = 0; xIndex < src.argb.length / src.height; xIndex++) {
+				int[] colorValues = new int[kernelSize * kernelSize];
+
+				for (int kernelX = 0; kernelX < kernelSize; kernelX++) {
+					for (int kernelY = 0; kernelY < kernelSize; kernelY++) {
+						int yCoord = ((yIndex - ((kernelSize - 1) / 2)) + kernelY) * src.width;
+						int xCoord = (xIndex - ((kernelSize - 1) / 2)) + kernelX;
+
+						int finalIndex = yCoord + xCoord;
+						int red = 0;
+
+						if (yCoord < src.argb.length && yCoord >= 0 & xCoord < src.width & xCoord >= 0) {
+							red = src.argb[finalIndex] >> 16 & 0xFF;
+						} else if (borderProcessing.name == "Border: White") {
+							red = 255;
+						} else if (borderProcessing.name == "Border: Constant Continuation") {
+							while (yCoord >= src.argb.length - src.width) {
+								yCoord--;
+							}
+
+							while (yCoord < 0) {
+								yCoord++;
+							}
+
+							while (xCoord < 0) {
+								xCoord++;
+							}
+
+							while (xCoord >= src.width) {
+								xCoord--;
+							}
+
+							finalIndex = yCoord + xCoord;
+							red = src.argb[finalIndex] >> 16 & 0xFF;
+						}
+
+						colorValues[kernelY * (kernelSize - 1) + kernelX] = red;
+
+					}
+				}
+
+				Arrays.sort(colorValues);
+
+				int median = colorValues[(colorValues.length - 1) / 2];
+
+				dst.argb[yIndex * src.width + xIndex] = (0xFF << 24) | (median << 16) | (median << 8) | (median);
+
+			}
+		}
+
 	}
 
 }
